@@ -25,7 +25,6 @@
       <ul id="navMenu">
         <li><a href="#track-transactions"><i class="fas fa-chart-line"></i> Track Transactions</a></li>
         <li><a href="home.html"><i class="fas fa-sign-out-alt"></i> Logout</a></li>
-
       </ul>
     </nav>
 
@@ -651,6 +650,7 @@
           <option value="KUCOIN">KUCOIN</option>
           <option value="Offline Trades">Offline Trades</option>
           <option value="BYBIT">BYBIT</option>
+          <option value="OKX">OKX</option> <!-- Added OKX option -->
         </select>
       </div>
 
@@ -771,6 +771,10 @@
     <div id="transactions-container">
       <!-- Transactions will be added here dynamically -->
     </div>
+    <div class="pagination">
+      <button id="prevUserPage" style="display: none;">Previous</button>
+      <button id="nextUserPage">Next</button>
+    </div>
   </section>
 
   <div class="overlay" id="overlay"></div>
@@ -830,13 +834,86 @@
         }
       });
 
+      let currentUserPage = 0;
+      const transactionsPerPage = 10;
+
       // Load saved transactions from localStorage
       let transactions = JSON.parse(localStorage.getItem('transactions')) || [];
+
+      // Sort transactions by date (most recent first)
+      transactions.sort((a, b) => new Date(b.date) - new Date(a.date));
       
-      // Display saved transactions on page load
-      transactions.forEach(transaction => {
-        displayTransaction(transaction);
+      // Function to display transactions for the current page
+      function displayUserTransactions() {
+        // Clear the container
+        transactionsContainer.innerHTML = '';
+
+        // Calculate the start and end index for the current page
+        const start = currentUserPage * transactionsPerPage;
+        const end = start + transactionsPerPage;
+        const paginatedTransactions = transactions.slice(start, end);
+
+        // Display the transactions for the current page
+        paginatedTransactions.forEach(transaction => {
+          displayUserTransaction(transaction);
+        });
+
+        // Update pagination buttons
+        const prevUserPageBtn = document.getElementById('prevUserPage');
+        const nextUserPageBtn = document.getElementById('nextUserPage');
+        prevUserPageBtn.style.display = currentUserPage === 0 ? 'none' : 'inline-block';
+        nextUserPageBtn.style.display = end >= transactions.length ? 'none' : 'inline-block';
+      }
+
+      // Function to display a single transaction
+      function displayUserTransaction(transaction) {
+        const transactionCard = document.createElement('div');
+        transactionCard.className = 'transaction-card';
+        transactionCard.setAttribute('data-type', transaction.type);
+        
+        // Calculate crypto amount
+        const cryptoAmount = (parseFloat(transaction.amount) / parseFloat(transaction.price)).toFixed(8);
+        
+        transactionCard.innerHTML = `
+          <div class="header">Date</div>
+          <div class="header">Platform</div>
+          <div class="header">Type</div>
+          <div class="header">Crypto Amount</div>
+          <div class="header">Price/Unit (TZS)</div>
+          <div class="header">Total Amount (TZS)</div>
+          <div class="header">Payment</div>
+          
+          <div class="value">${transaction.date}</div>
+          <div class="value">${transaction.platform}</div>
+          <div class="value">${transaction.type}</div>
+          <div class="value">${transaction.crypto} ${cryptoAmount}</div>
+          <div class="value">${formatNumberWithCommas(transaction.price)}.00/=</div>
+          <div class="value">${formatNumberWithCommas(transaction.amount)}.00/=</div>
+          <div class="value">${transaction.payment}</div>
+        `;
+
+        transactionsContainer.appendChild(transactionCard);
+      }
+
+      // Event listeners for pagination buttons
+      const nextUserPageBtn = document.getElementById('nextUserPage');
+      const prevUserPageBtn = document.getElementById('prevUserPage');
+      nextUserPageBtn.addEventListener('click', () => {
+        if ((currentUserPage + 1) * transactionsPerPage < transactions.length) {
+          currentUserPage++;
+          displayUserTransactions();
+        }
       });
+
+      prevUserPageBtn.addEventListener('click', () => {
+        if (currentUserPage > 0) {
+          currentUserPage--;
+          displayUserTransactions();
+        }
+      });
+
+      // Initial display of transactions
+      displayUserTransactions();
 
       function showStep(step) {
         document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
@@ -855,6 +932,10 @@
         return value;
       }
 
+      function formatNumberWithCommas(value) {
+        return Number(value).toLocaleString('en-US');
+      }
+
       function updateSummary() {
         document.getElementById('summary-platform').textContent = document.getElementById('platform').value || '-';
         document.getElementById('summary-type').textContent = document.getElementById('type').value || '-';
@@ -866,77 +947,6 @@
           (Number(document.getElementById('price-per-unit').value || 0).toLocaleString(undefined, 
           {minimumFractionDigits: 2, maximumFractionDigits: 2}) + '/=') || '-';
         document.getElementById('summary-payment').textContent = document.getElementById('payment-method').value || '-';
-      }
-
-      function displayTransaction(transaction) {
-        const transactionCard = document.createElement('div');
-        transactionCard.className = 'transaction-card';
-        transactionCard.setAttribute('data-type', transaction.type);
-        
-        // Calculate crypto amount
-        const cryptoAmount = (parseFloat(transaction.amount) / parseFloat(transaction.price)).toFixed(8);
-        
-        // Calculate random platform fee (1-5%)
-        const platformFeePercentage = (Math.random() * 4 + 1).toFixed(2);
-        const platformFeeAmount = (parseFloat(transaction.amount) * (platformFeePercentage / 100)).toFixed(2);
-        
-        transactionCard.innerHTML = `
-          <div class="header">Date</div>
-          <div class="header">Platform</div>
-          <div class="header">Type</div>
-          <div class="header">Crypto Amount</div>
-          <div class="header">Price/Unit (TZS)</div>
-          <div class="header">Total Amount (TZS)</div>
-          <div class="header">Payment</div>
-          
-          <div class="value">${transaction.date}</div>
-          <div class="value">${transaction.platform}</div>
-          <div class="value">${transaction.type}</div>
-          <div class="value">${transaction.crypto} ${cryptoAmount}</div>
-          <div class="value">${transaction.price}.00/=</div>
-          <div class="value">${transaction.amount}.00/=</div>
-          <div class="value">${transaction.payment}</div>
-
-          <button class="toggle-details" style="display: none;">
-            <i class="fas fa-chevron-down"></i>
-          </button>
-
-          <div class="transaction-details">
-            <div class="detail-item">
-              <span class="detail-label">Platform Fee</span>
-              <span class="detail-value">${platformFeePercentage}% (TZS ${platformFeeAmount})</span>
-            </div>
-            <div class="detail-item">
-              <span class="detail-label">Net Amount</span>
-              <span class="detail-value">TZS ${(parseFloat(transaction.amount) - parseFloat(platformFeeAmount)).toFixed(2)}.00/=</span>
-            </div>
-            <div class="detail-item">
-              <span class="detail-label">Transaction ID</span>
-              <span class="detail-value">#${Math.random().toString(36).substr(2, 9).toUpperCase()}</span>
-            </div>
-            <div class="detail-item">
-              <span class="detail-label">Status</span>
-              <span class="detail-value">Completed</span>
-            </div>
-          </div>
-        `;
-
-        // Add click event listener for expanding/collapsing details
-        transactionCard.addEventListener('click', (e) => {
-            const details = transactionCard.querySelector('.transaction-details');
-            details.classList.toggle('active');
-            const toggleBtn = transactionCard.querySelector('.toggle-details i');
-            toggleBtn.classList.toggle('fa-chevron-down');
-            toggleBtn.classList.toggle('fa-chevron-up');
-        });
-
-        // Insert at the beginning of the container with animation
-        transactionsContainer.insertBefore(transactionCard, transactionsContainer.firstChild);
-        
-        // Remove animation class after animation completes
-        setTimeout(() => {
-            transactionCard.classList.remove('new-transaction');
-        }, 500);
       }
 
       function addTransactionToHistory() {
@@ -958,7 +968,7 @@
         localStorage.setItem('transactions', JSON.stringify(transactions));
         
         // Display the new transaction with animation
-        displayTransaction(transaction);
+        displayUserTransaction(transaction);
 
         // Optional: Show success message
         showNotification('Transaction added successfully!');
