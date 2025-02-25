@@ -650,6 +650,7 @@
           <option value="Remitano">Remitano</option>
           <option value="BITGET">BITGET</option>
           <option value="KUCOIN">KUCOIN</option>
+          <option value="OKX">OKX</option> <!-- Added OKX option -->
           <option value="Offline Trades">Offline Trades</option>
           <option value="BYBIT">BYBIT</option>
         </select>
@@ -755,7 +756,7 @@
 
   <section style="text-align: center; margin: 20px auto;">
     <div style="display: flex; justify-content: center; gap: 20px; flex-wrap: wrap;">
-      <button style="flex: 1; max-width: 250px; min-width: 200px; padding: 15px;">
+      <button style="flex: 1; max-width: 250px; min-width: 200px; padding: 15px;" onclick="window.location.href='reports.html'">
         <i class="fas fa-chart-line"></i> Trade Entries
       </button>
       <button style="flex: 1; max-width: 250px; min-width: 200px; padding: 15px;">
@@ -771,6 +772,10 @@
     <h2><i class="fas fa-history" style="color: #2C2C2C"></i> Recent Transactions</h2>
     <div id="transactions-container">
       <!-- Transactions will be added here dynamically -->
+    </div>
+    <div class="pagination">
+      <button id="prevPage" style="display: none;">Previous</button>
+      <button id="nextPage">Next</button>
     </div>
   </section>
 
@@ -818,6 +823,10 @@
       const transactionsContainer = document.getElementById('transactions-container');
       const navToggle = document.getElementById('navToggle');
       const navMenu = document.getElementById('navMenu');
+      let currentPage = 0;
+      const transactionsPerPage = 10;
+      const prevPageBtn = document.getElementById('prevPage');
+      const nextPageBtn = document.getElementById('nextPage');
 
       // Toggle navigation menu
       navToggle.addEventListener('click', () => {
@@ -834,41 +843,30 @@
       // Load saved transactions from localStorage
       let transactions = JSON.parse(localStorage.getItem('transactions')) || [];
       
-      // Display saved transactions on page load
-      transactions.forEach(transaction => {
-        displayTransaction(transaction);
-      });
+      // Sort transactions by date (most recent first)
+      transactions.sort((a, b) => new Date(b.date) - new Date(a.date));
+      
+      // Function to display transactions for the current page
+      function displayTransactions() {
+        // Clear the container
+        transactionsContainer.innerHTML = '';
 
-      function showStep(step) {
-        document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
-        document.getElementById(`step${step}`).classList.add('active');
-        progress.style.width = ((step - 1) / (totalSteps - 1) * 100) + '%';
+        // Calculate the start and end index for the current page
+        const start = currentPage * transactionsPerPage;
+        const end = start + transactionsPerPage;
+        const paginatedTransactions = transactions.slice(start, end);
 
-        prevBtn.style.display = step === 1 ? 'none' : 'block';
-        nextBtn.style.display = step === totalSteps ? 'none' : 'block';
-        submitBtn.style.display = step === totalSteps ? 'block' : 'none';
+        // Display the transactions for the current page
+        paginatedTransactions.forEach(transaction => {
+          displayTransaction(transaction);
+        });
+
+        // Update pagination buttons
+        prevPageBtn.style.display = currentPage === 0 ? 'none' : 'inline-block';
+        nextPageBtn.style.display = end >= transactions.length ? 'none' : 'inline-block';
       }
 
-      function formatNumber(value) {
-        if (!value.includes('.')) {
-          return value + '.00';
-        }
-        return value;
-      }
-
-      function updateSummary() {
-        document.getElementById('summary-platform').textContent = document.getElementById('platform').value || '-';
-        document.getElementById('summary-type').textContent = document.getElementById('type').value || '-';
-        document.getElementById('summary-crypto').textContent = document.getElementById('crypto-type').value || '-';
-        document.getElementById('summary-amount').textContent = 
-          (Number(document.getElementById('amount').value || 0).toLocaleString(undefined, 
-          {minimumFractionDigits: 2, maximumFractionDigits: 2}) + '/=') || '-';
-        document.getElementById('summary-price').textContent = 
-          (Number(document.getElementById('price-per-unit').value || 0).toLocaleString(undefined, 
-          {minimumFractionDigits: 2, maximumFractionDigits: 2}) + '/=') || '-';
-        document.getElementById('summary-payment').textContent = document.getElementById('payment-method').value || '-';
-      }
-
+      // Function to display a single transaction
       function displayTransaction(transaction) {
         const transactionCard = document.createElement('div');
         transactionCard.className = 'transaction-card';
@@ -894,8 +892,8 @@
           <div class="value">${transaction.platform}</div>
           <div class="value">${transaction.type}</div>
           <div class="value">${transaction.crypto} ${cryptoAmount}</div>
-          <div class="value">${transaction.price}.00/=</div>
-          <div class="value">${transaction.amount}.00/=</div>
+          <div class="value">${formatNumberWithCommas(transaction.price)}.00/=</div>
+          <div class="value">${formatNumberWithCommas(transaction.amount)}.00/=</div>
           <div class="value">${transaction.payment}</div>
 
           <button class="toggle-details" style="display: none;">
@@ -905,11 +903,11 @@
           <div class="transaction-details">
             <div class="detail-item">
               <span class="detail-label">Platform Fee</span>
-              <span class="detail-value">${platformFeePercentage}% (TZS ${platformFeeAmount})</span>
+              <span class="detail-value">${platformFeePercentage}% (TZS ${formatNumberWithCommas(platformFeeAmount)})</span>
             </div>
             <div class="detail-item">
               <span class="detail-label">Net Amount</span>
-              <span class="detail-value">TZS ${(parseFloat(transaction.amount) - parseFloat(platformFeeAmount)).toFixed(2)}.00/=</span>
+              <span class="detail-value">TZS ${formatNumberWithCommas((parseFloat(transaction.amount) - parseFloat(platformFeeAmount)).toFixed(2))}.00/=</span>
             </div>
             <div class="detail-item">
               <span class="detail-label">Transaction ID</span>
@@ -924,6 +922,17 @@
 
         // Add click event listener for expanding/collapsing details
         transactionCard.addEventListener('click', (e) => {
+            // Collapse any other expanded transaction details
+            document.querySelectorAll('.transaction-card .transaction-details.active').forEach(details => {
+                if (details !== transactionCard.querySelector('.transaction-details')) {
+                    details.classList.remove('active');
+                    const toggleBtn = details.previousElementSibling.querySelector('i');
+                    toggleBtn.classList.remove('fa-chevron-up');
+                    toggleBtn.classList.add('fa-chevron-down');
+                }
+            });
+
+            // Toggle the current transaction details
             const details = transactionCard.querySelector('.transaction-details');
             details.classList.toggle('active');
             const toggleBtn = transactionCard.querySelector('.toggle-details i');
@@ -938,6 +947,40 @@
         setTimeout(() => {
             transactionCard.classList.remove('new-transaction');
         }, 500);
+      }
+
+      function showStep(step) {
+        document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
+        document.getElementById(`step${step}`).classList.add('active');
+        progress.style.width = ((step - 1) / (totalSteps - 1) * 100) + '%';
+
+        prevBtn.style.display = step === 1 ? 'none' : 'block';
+        nextBtn.style.display = step === totalSteps ? 'none' : 'block';
+        submitBtn.style.display = step === totalSteps ? 'block' : 'none';
+      }
+
+      function formatNumber(value) {
+        if (!value.includes('.')) {
+          return value + '.00';
+        }
+        return value;
+      }
+
+      function formatNumberWithCommas(value) {
+        return Number(value).toLocaleString('en-US');
+      }
+
+      function updateSummary() {
+        document.getElementById('summary-platform').textContent = document.getElementById('platform').value || '-';
+        document.getElementById('summary-type').textContent = document.getElementById('type').value || '-';
+        document.getElementById('summary-crypto').textContent = document.getElementById('crypto-type').value || '-';
+        document.getElementById('summary-amount').textContent = 
+          (Number(document.getElementById('amount').value || 0).toLocaleString(undefined, 
+          {minimumFractionDigits: 2, maximumFractionDigits: 2}) + '/=') || '-';
+        document.getElementById('summary-price').textContent = 
+          (Number(document.getElementById('price-per-unit').value || 0).toLocaleString(undefined, 
+          {minimumFractionDigits: 2, maximumFractionDigits: 2}) + '/=') || '-';
+        document.getElementById('summary-payment').textContent = document.getElementById('payment-method').value || '-';
       }
 
       function addTransactionToHistory() {
@@ -1091,6 +1134,24 @@
         document.getElementById('overlay').style.display = 'none';
         document.getElementById('confirmDialog').style.display = 'none';
       });
+
+      // Event listeners for pagination buttons
+      nextPageBtn.addEventListener('click', () => {
+        if ((currentPage + 1) * transactionsPerPage < transactions.length) {
+          currentPage++;
+          displayTransactions();
+        }
+      });
+
+      prevPageBtn.addEventListener('click', () => {
+        if (currentPage > 0) {
+          currentPage--;
+          displayTransactions();
+        }
+      });
+
+      // Initial display of transactions
+      displayTransactions();
 
       // Initialize summary with empty values
       updateSummary();
