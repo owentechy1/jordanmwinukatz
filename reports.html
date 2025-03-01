@@ -15,14 +15,10 @@
       <!-- Add your logo image here -->
       <img src="logo2.png" alt="Logo" style="height: 90px;">
     </div>
-    <h1 style="color: white; font-family: 'Inter', sans-serif; position: absolute; left: 20%; transform: translateX(-50%); margin: 0; font-size: 2rem;">
-      jordanmwinukatz
-      </h1>
     <button class="nav-toggle" id="navToggle">
       <i class="fas fa-bars"></i>
     </button>
     <ul id="navMenu">
-      <li><a href="admin.html" class="active"><i class="fas fa-home"></i> Home</a></li>
       <li><a href="reports.html"><i class="fas fa-chart-line"></i> Transactions</a></li>
       <li><a href="settings.html"><i class="fas fa-cog"></i> Settings</a></li>
       <li><a href="home.html"><i class="fas fa-sign-out-alt"></i> Logout</a></li>
@@ -284,6 +280,27 @@
         transform: translateY(0);
       }
     }
+
+    .pagination {
+      margin-top: 20px;
+      display: flex;
+      align-items: center;
+      gap: 15px;
+      justify-content: center;
+    }
+
+    .pagination button {
+      padding: 8px 15px;
+    }
+
+    .pagination button:disabled {
+      background-color: #cccccc;
+      cursor: not-allowed;
+    }
+
+    #pageInfo {
+      font-weight: 500;
+    }
   </style>
 
   <!-- Admin Panel (Sample View) -->
@@ -310,7 +327,7 @@
       <select id="filter-platform">
         <option value="All">All</option>
         <option value="Binance">Binance</option>
-        <option value="Reminato">Remitano</option>
+        <option value="Remitano">Remitano</option>
         <option value="BITGET">BITGET</option>
         <option value="KUCOIN">KUCOIN</option>
         <option value="Offline Trades">Offline Trades</option>
@@ -333,6 +350,15 @@
         <option value="DOGE">DOGE</option>
         <option value="PEPE">PEPE</option>
       </select>
+
+      <label for="entries-per-page">Show entries:</label>
+      <select id="entries-per-page">
+        <option value="10">10</option>
+        <option value="50">50</option>
+        <option value="100">100</option>
+        <option value="200">200</option>
+        <option value="all">All</option>
+      </select>
     </div>
 
     <table>
@@ -352,6 +378,12 @@
         <!-- Transaction data will be dynamically inserted here -->
       </tbody>
     </table>
+
+    <div class="pagination">
+      <button id="prevPage">Previous</button>
+      <span id="pageInfo">Page <span id="currentPage">1</span> of <span id="totalPages">1</span></span>
+      <button id="nextPage">Next</button>
+    </div>
 
     <button type="button" onclick="downloadCSV()">Download as CSV</button>
     <button type="button" onclick="downloadExcel()">Download as Excel</button>
@@ -398,6 +430,29 @@
     document.getElementById('filter-platform').addEventListener('change', updateTransactionsList);
     document.getElementById('filter-crypto').addEventListener('change', updateTransactionsList);
 
+    function getPlatformFee(platform) {
+      const fees = {
+        'Binance': 0.16,
+        'Remitano': 1.0,
+        'KUCOIN': 0,
+        'BITGET': 0,
+        'OKX': 0,
+        'BYBIT': 0
+      };
+      return fees[platform] || 0;
+    }
+
+    // Add these new variables at the top of your script
+    let currentPage = 1;
+    let entriesPerPage = 10;
+
+    // Add event listener for entries per page dropdown
+    document.getElementById('entries-per-page').addEventListener('change', function(e) {
+      entriesPerPage = e.target.value === 'all' ? 'all' : parseInt(e.target.value);
+      currentPage = 1;
+      updateTransactionsList();
+    });
+
     function updateTransactionsList() {
       const transactions = JSON.parse(localStorage.getItem('transactions')) || [];
       const tbody = document.getElementById('transactionsList');
@@ -433,8 +488,29 @@
         return searchMatch && userMatch && dateMatch && platformMatch && cryptoMatch;
       });
 
-      filteredTransactions.forEach(transaction => {
+      // Pagination logic
+      const totalTransactions = filteredTransactions.length;
+      const totalPages = entriesPerPage === 'all' ? 1 : Math.ceil(totalTransactions / entriesPerPage);
+      
+      document.getElementById('totalPages').textContent = totalPages;
+      document.getElementById('currentPage').textContent = currentPage;
+      
+      document.getElementById('prevPage').disabled = currentPage === 1;
+      document.getElementById('nextPage').disabled = currentPage === totalPages;
+
+      // Slice transactions based on pagination
+      const startIndex = entriesPerPage === 'all' ? 0 : (currentPage - 1) * entriesPerPage;
+      const endIndex = entriesPerPage === 'all' ? totalTransactions : startIndex + entriesPerPage;
+      
+      const displayedTransactions = filteredTransactions.slice(startIndex, endIndex);
+
+      displayedTransactions.forEach(transaction => {
         const cryptoAmount = (parseFloat(transaction.amount) / parseFloat(transaction.price)).toFixed(8);
+        const feePercentage = getPlatformFee(transaction.platform);
+        // Convert crypto amount to USDT equivalent
+        const usdtAmount = parseFloat(cryptoAmount);
+        const feeAmount = (usdtAmount * feePercentage / 100).toFixed(8);
+        const netAmount = (usdtAmount - feeAmount).toFixed(8);
         
         // Create main row
         const row = document.createElement('tr');
@@ -443,14 +519,14 @@
           <td>${transaction.date}</td>
           <td>${transaction.platform}</td>
           <td style="color: ${transaction.type.toLowerCase() === 'buy' ? '#28A745' : '#D32F2F'}">${transaction.type}</td>
-          <td><span class="crypto-amount">${transaction.crypto} ${cryptoAmount}</span></td>
+          <td><span class="crypto-amount">USDT ${usdtAmount}</span></td>
           <td><span class="price-amount">${formatCurrency(transaction.price)}</span></td>
           <td><span class="total-amount">${formatCurrency(transaction.amount)}</span></td>
           <td>${transaction.payment}</td>
           <td>${transaction.user || 'Unknown'}</td>
         `;
 
-        // Create details row
+        // Create details row with USDT amounts
         const detailsRow = document.createElement('tr');
         detailsRow.className = 'details-row';
         detailsRow.innerHTML = `
@@ -459,19 +535,15 @@
               <div class="details-grid">
                 <div class="detail-item">
                   <h4>Platform Fee</h4>
-                  <p>${(Math.random() * 2).toFixed(2)}%</p>
+                  <p>${feePercentage}%</p>
                 </div>
                 <div class="detail-item">
-                  <h4>Transaction Hash</h4>
-                  <p>0x${Math.random().toString(16).substr(2, 40)}</p>
+                  <h4>Fee Amount (in USDT)</h4>
+                  <p>USDT ${feeAmount}</p>
                 </div>
                 <div class="detail-item">
-                  <h4>Network Fee</h4>
-                  <p>${transaction.crypto} ${(Math.random() * 0.001).toFixed(8)}</p>
-                </div>
-                <div class="detail-item">
-                  <h4>Status</h4>
-                  <p>Completed</p>
+                  <h4>Net Amount (in USDT)</h4>
+                  <p>USDT ${netAmount}</p>
                 </div>
               </div>
             </div>
@@ -570,6 +642,24 @@
       link.click();
       document.body.removeChild(link);
     }
+
+    // Add pagination button handlers
+    document.getElementById('prevPage').addEventListener('click', () => {
+      if (currentPage > 1) {
+        currentPage--;
+        updateTransactionsList();
+      }
+    });
+
+    document.getElementById('nextPage').addEventListener('click', () => {
+      const totalTransactions = (JSON.parse(localStorage.getItem('transactions')) || []).length;
+      const totalPages = entriesPerPage === 'all' ? 1 : Math.ceil(totalTransactions / entriesPerPage);
+      
+      if (currentPage < totalPages) {
+        currentPage++;
+        updateTransactionsList();
+      }
+    });
 
     // Initial load of transactions
     updateTransactionsList();
